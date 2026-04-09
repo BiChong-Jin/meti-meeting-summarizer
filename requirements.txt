@@ -1,0 +1,12 @@
+beautifulsoup4==4.14.3
+langchain-classic==1.0.3
+langchain-core==1.2.26
+langchain-google-genai==4.2.1
+langchain-openai==1.1.12
+langchain-text-splitters==1.1.1
+PyMuPDF==1.27.2.2
+python-dotenv==1.2.2
+requests==2.33.1
+streamlit==1.56.0
+youtube-transcript-api==1.2.4
+pytest==9.0.3
