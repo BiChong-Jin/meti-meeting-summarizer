@@ -4,3 +4,6 @@
 debugnote.md 
 deleted_files
 deleted_files/*
+data.db
+data.db-wal
+data.db-shm

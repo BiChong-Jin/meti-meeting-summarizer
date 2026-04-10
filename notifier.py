@@ -1,6 +1,10 @@
 """Send Slack notifications via Incoming Webhook."""
 
+import logging
+
 import requests
+
+log = logging.getLogger(__name__)
 
 
 def send_slack(webhook_url: str, index_url: str, result: dict) -> None:
@@ -21,3 +25,4 @@ def send_slack(webhook_url: str, index_url: str, result: dict) -> None:
     payload = {"text": "\n".join(lines)}
     resp = requests.post(webhook_url, json=payload, timeout=10)
     resp.raise_for_status()
+    log.info("Slack notification sent (%d new items)", len(result.get("new_items", [])))

@@ -117,15 +117,14 @@ class TestScrapeIndex:
 # load_state / save_state
 # ---------------------------------------------------------------------------
 class TestStateIO:
-    def test_load_returns_default_when_no_file(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("site_monitor.STATE_FILE", tmp_path / "nonexistent.json")
+    def test_load_returns_default_when_empty_db(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("db.DB_PATH", tmp_path / "test.db")
         state = load_state()
         assert state["last_update_date"] == ""
         assert state["known_hrefs"] == []
 
     def test_save_and_load_roundtrip(self, tmp_path, monkeypatch):
-        state_file = tmp_path / "state.json"
-        monkeypatch.setattr("site_monitor.STATE_FILE", state_file)
+        monkeypatch.setattr("db.DB_PATH", tmp_path / "test.db")
 
         links = [
             {"href": "https://example.com/001.html", "text": "第1回"},
@@ -143,9 +142,6 @@ class TestStateIO:
 # check_for_updates
 # ---------------------------------------------------------------------------
 class TestCheckForUpdates:
-    def _make_scrape_result(self, date, links):
-        return {"last_update_date": date, "links": links}
-
     @patch("site_monitor.load_state")
     @patch("site_monitor.scrape_index")
     def test_detects_new_links(self, mock_scrape, mock_state):

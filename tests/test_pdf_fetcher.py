@@ -9,7 +9,7 @@ from pdf_fetcher import (
     ScraperWarning,
     _get_with_retry,
     download_pdf,
-    fetch_pdf_links,
+    scrape_page,
 )
 
 
@@ -75,10 +75,12 @@ class TestGetWithRetry:
 
 
 # ---------------------------------------------------------------------------
-# fetch_pdf_links
+# scrape_page — PDF link extraction
 # ---------------------------------------------------------------------------
 SAMPLE_HTML_WITH_PDFS = """
 <html><body>
+  <h1 id="MainContentsArea">第5回 テスト会議</h1>
+  <div class="main w1000"><h2>開催日</h2><p>2026年3月27日</p></div>
   <a href="/docs/report.pdf">レポート資料</a>
   <a href="./appendix.pdf">参考資料</a>
   <a href="/other/page.html">議事録</a>
@@ -101,7 +103,7 @@ SAMPLE_HTML_DUPLICATE_PDFS = """
 """
 
 
-class TestFetchPdfLinks:
+class TestScrapePage:
     @patch("pdf_fetcher._get_with_retry")
     def test_extracts_pdf_links(self, mock_get):
         mock_resp = MagicMock()
@@ -109,13 +111,24 @@ class TestFetchPdfLinks:
         mock_resp.apparent_encoding = "utf-8"
         mock_get.return_value = mock_resp
 
-        links = fetch_pdf_links("https://example.com/meeting/005.html")
+        result = scrape_page("https://example.com/meeting/005.html")
+        links = result["pdf_links"]
 
         assert len(links) == 2
         assert links[0]["url"] == "https://example.com/docs/report.pdf"
         assert links[1]["url"] == "https://example.com/meeting/appendix.pdf"
-        # filenames should include link text
         assert "レポート資料" in links[0]["filename"]
+
+    @patch("pdf_fetcher._get_with_retry")
+    def test_extracts_title_and_date(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.text = SAMPLE_HTML_WITH_PDFS
+        mock_resp.apparent_encoding = "utf-8"
+        mock_get.return_value = mock_resp
+
+        result = scrape_page("https://example.com/meeting/005.html")
+        assert result["title"] == "第5回 テスト会議"
+        assert result["date"] == "2026年3月27日"
 
     @patch("pdf_fetcher._get_with_retry")
     def test_raises_scraper_warning_when_no_pdfs(self, mock_get):
@@ -125,7 +138,7 @@ class TestFetchPdfLinks:
         mock_get.return_value = mock_resp
 
         with pytest.raises(ScraperWarning, match="PDFリンクが見つかりませんでした"):
-            fetch_pdf_links("https://example.com/empty.html")
+            scrape_page("https://example.com/empty.html")
 
     @patch("pdf_fetcher._get_with_retry")
     def test_deduplicates_pdf_links(self, mock_get):
@@ -134,8 +147,8 @@ class TestFetchPdfLinks:
         mock_resp.apparent_encoding = "utf-8"
         mock_get.return_value = mock_resp
 
-        links = fetch_pdf_links("https://example.com/page.html")
-        urls = [l["url"] for l in links]
+        result = scrape_page("https://example.com/page.html")
+        urls = [l["url"] for l in result["pdf_links"]]
 
         assert len(urls) == 2
         assert urls.count("https://example.com/docs/report.pdf") == 1

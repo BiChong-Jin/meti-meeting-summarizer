@@ -1,8 +1,11 @@
 """Fetch a YouTube transcript and summarize it using the LLM."""
 
+import logging
 import re
 
 from youtube_transcript_api import YouTubeTranscriptApi
+
+log = logging.getLogger(__name__)
 from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled
 
 
@@ -48,8 +51,10 @@ def fetch_transcript(video_id: str) -> str:
         ]:
             try:
                 fetched = fetch_method().fetch()
+                log.info("Transcript fetched for %s (%d entries)", video_id, len(fetched))
                 return " ".join(entry.text for entry in fetched)
-            except Exception:
+            except Exception as e:
+                log.debug("Transcript method failed for %s: %s", video_id, e)
                 continue
 
         raise VideoTranscriptError("利用可能な字幕が見つかりませんでした。")

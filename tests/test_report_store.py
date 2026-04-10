@@ -1,20 +1,17 @@
 """Tests for report_store — save, list, load, and search."""
 
-import json
-
 import pytest
 
 from report_store import list_reports, load_report, save_report, search_reports
 
 
 @pytest.fixture()
-def reports_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr("report_store.REPORTS_DIR", tmp_path)
-    return tmp_path
+def test_db(tmp_path, monkeypatch):
+    monkeypatch.setattr("db.DB_PATH", tmp_path / "test.db")
 
 
 @pytest.fixture()
-def sample_reports(reports_dir):
+def sample_reports(test_db):
     """Create 3 reports with different content for search tests."""
     ids = []
     ids.append(save_report("第5回 次世代基盤会議", "2026/03/27", "電力ガスの規制改革について議論", ["doc1.pdf", "doc2.pdf"]))
@@ -24,29 +21,29 @@ def sample_reports(reports_dir):
 
 
 class TestSaveAndLoad:
-    def test_save_returns_id(self, reports_dir):
+    def test_save_returns_id(self, test_db):
         rid = save_report("テスト会議", "2026/01/01", "内容", ["a.pdf"])
         assert isinstance(rid, str)
         assert len(rid) > 0
 
-    def test_load_roundtrip(self, reports_dir):
+    def test_load_roundtrip(self, test_db):
         rid = save_report("テスト会議", "2026/01/01", "レポート内容です", ["a.pdf"])
         report = load_report(rid)
         assert report["title"] == "テスト会議"
         assert report["content"] == "レポート内容です"
         assert report["sources"] == ["a.pdf"]
 
-    def test_load_nonexistent_returns_none(self, reports_dir):
+    def test_load_nonexistent_returns_none(self, test_db):
         assert load_report("nonexistent_id") is None
 
-    def test_empty_title_gets_default(self, reports_dir):
+    def test_empty_title_gets_default(self, test_db):
         rid = save_report("", "", "content", [])
         report = load_report(rid)
         assert report["title"] == "(タイトルなし)"
 
 
 class TestListReports:
-    def test_list_empty(self, reports_dir):
+    def test_list_empty(self, test_db):
         assert list_reports() == []
 
     def test_list_returns_all(self, sample_reports):

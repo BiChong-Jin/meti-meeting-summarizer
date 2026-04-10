@@ -3,14 +3,12 @@
 import json
 import logging
 from datetime import datetime
-from pathlib import Path
 from urllib.parse import urljoin
 
+from db import get_connection
 from pdf_fetcher import _get_with_retry
 
 log = logging.getLogger(__name__)
-
-STATE_FILE = Path("monitor_state.json")
 
 
 class PageStructureChanged(Exception):
@@ -62,18 +60,27 @@ def scrape_index(index_url: str) -> dict:
 
 
 def load_state() -> dict:
-    if STATE_FILE.exists():
-        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
-    return {"last_update_date": "", "known_hrefs": [], "last_checked": ""}
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM monitor_state WHERE id = 1").fetchone()
+    if not row:
+        return {"last_update_date": "", "known_hrefs": [], "last_checked": ""}
+    return {
+        "last_update_date": row["last_update_date"],
+        "known_hrefs": json.loads(row["known_hrefs"]),
+        "last_checked": row["last_checked"],
+    }
 
 
 def save_state(last_update_date: str, links: list[dict]) -> None:
-    state = {
-        "last_update_date": last_update_date,
-        "known_hrefs": [l["href"] for l in links],
-        "last_checked": datetime.now().isoformat(timespec="seconds"),
-    }
-    STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO monitor_state (id, last_update_date, known_hrefs, last_checked) VALUES (1, ?, ?, ?)",
+            (
+                last_update_date,
+                json.dumps([l["href"] for l in links], ensure_ascii=False),
+                datetime.now().isoformat(timespec="seconds"),
+            ),
+        )
 
 
 def check_for_updates(index_url: str) -> dict:

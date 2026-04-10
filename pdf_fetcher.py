@@ -7,6 +7,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
+
 log = logging.getLogger(__name__)
 
 HEADERS = {
@@ -45,7 +46,7 @@ def _get_with_retry(url: str, timeout: int = 30) -> requests.Response:
 
 
 _YT_PATTERN = re.compile(
-    r"https?://(?:www\.youtube\.com/(?:watch\?v=|embed/|live/)|youtu\.be/)[A-Za-z0-9_-]{11}"
+    r"https?://(?:(?:www\.)?youtube\.com/(?:watch\?v=|embed/|live/)|youtu\.be/)[A-Za-z0-9_-]{11}"
 )
 
 
@@ -71,10 +72,7 @@ def _parse_pdf_links(soup: BeautifulSoup, page_url: str) -> list[dict]:
 
 
 def _normalize_yt_url(url: str) -> str:
-    """Normalize embed/short URLs to standard watch URL."""
-    # convert embed URL to watch URL
-    url = re.sub(r"youtube\.com/embed/([A-Za-z0-9_-]{11})", r"youtube.com/watch?v=\1", url)
-    # convert youtu.be short URL to watch URL
+    """Ensure URL has https:// prefix, keep original format (live/embed/watch)."""
     url = re.sub(r"youtu\.be/([A-Za-z0-9_-]{11})", r"youtube.com/watch?v=\1", url)
     if url.startswith("youtube.com"):
         url = "https://www." + url
@@ -154,24 +152,13 @@ def scrape_page(page_url: str) -> dict:
     }
 
 
-# Kept for backward compatibility with existing tests
-def fetch_pdf_links(page_url: str) -> list[dict]:
-    return scrape_page(page_url)["pdf_links"]
-
-
-def fetch_video_links(page_url: str) -> list[dict]:
-    resp = _get_with_retry(page_url)
-    resp.encoding = resp.apparent_encoding
-    return _parse_video_links(BeautifulSoup(resp.text, "html.parser"), page_url)
-
-
 def download_pdf(url: str) -> bytes:
     """Download a single PDF and return its raw bytes.
     Raises ValueError if the response doesn't look like a PDF."""
     resp = _get_with_retry(url, timeout=60)
     data = resp.content
 
-    if not data[:4].startswith(PDF_MAGIC):
+    if data[:4] != PDF_MAGIC:
         raise ValueError(
             f"ダウンロードしたファイルがPDF形式ではありません（HTMLエラーページの可能性）: {url}"
         )
