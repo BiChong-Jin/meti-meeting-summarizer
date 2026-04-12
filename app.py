@@ -17,6 +17,7 @@ load_dotenv()
 
 from db import get_connection
 from pdf_fetcher import download_pdf, scrape_page
+from ocr import extract_text_with_ocr
 from notifier import send_slack
 from site_monitor import check_for_updates, save_state
 from report_store import save_report, list_reports, list_video_reports, load_report, search_reports, search_video_reports, count_reports, REPORTS_PER_PAGE
@@ -332,6 +333,34 @@ def run_summarization(text_chunks: list[str], map_prompt, reduce_prompt, stream_
         return llm.invoke(reduce_text).content
 
 
+def extract_pdf_text(pdf_bytes: bytes, filename: str) -> str | None:
+    """Extract text from PDF bytes. Falls back to OCR if no text is found.
+    Returns the extracted text, or None if extraction failed."""
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    text = "".join([page.get_text("text") for page in doc])
+
+    if text.strip():
+        return text
+
+    # Fallback: OCR via OpenAI Vision API
+    if not openai_api_key:
+        st.warning(f"{filename}: 画像PDFですがAPIキーが未設定のためOCR処理できません")
+        return None
+
+    log.info("No text found in %s, falling back to OCR", filename)
+    st.info(f"{filename}: 画像PDFを検出しました。OCR処理中...")
+    try:
+        text = extract_text_with_ocr(pdf_bytes, openai_api_key)
+        if text.strip():
+            return text
+        st.warning(f"{filename}: OCRでもテキストを抽出できませんでした")
+        return None
+    except Exception as e:
+        log.error("OCR failed for %s: %s", filename, e)
+        st.warning(f"{filename}: OCR処理に失敗しました: {e}")
+        return None
+
+
 # --- 3. Prompt Engineering (Japanese Form) ---
 
 # Map Prompt: Summarize each chunk in Japanese
@@ -411,10 +440,8 @@ with st.expander("🌐 WebサイトからPDFを自動取得"):
                         continue
                     try:
                         pdf_bytes = download_pdf(link["url"])
-                        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-                        text = "".join([page.get_text("text") for page in doc])
-                        if not text.strip():
-                            st.warning(f"{link['filename']}: テキストを抽出できませんでした（画像PDFの可能性）")
+                        text = extract_pdf_text(pdf_bytes, link["filename"])
+                        if not text:
                             continue
                         st.session_state.pdf_texts.append((link["filename"], text))
                         added += 1
@@ -445,14 +472,9 @@ uploaded_file = st.file_uploader(
 if uploaded_file:
     if not any(f[0] == uploaded_file.name for f in st.session_state.pdf_texts):
         with st.spinner(f"{uploaded_file.name} を解析中..."):
-            doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-            text = "".join([page.get_text("text") for page in doc])
-            if not text.strip():
-                st.warning(
-                    f"{uploaded_file.name}: テキストを抽出できませんでした。"
-                    "画像のみのPDFの可能性があります。OCR対応は現在未実装です。"
-                )
-            else:
+            pdf_bytes = uploaded_file.read()
+            text = extract_pdf_text(pdf_bytes, uploaded_file.name)
+            if text:
                 st.session_state.pdf_texts.append((uploaded_file.name, text))
                 save_cache()
                 st.success(f"追加完了: {uploaded_file.name}")
