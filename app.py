@@ -156,7 +156,7 @@ if not st.session_state.authenticated:
         with st.form("login_form"):
             email = st.text_input(
                 "メールアドレス",
-                placeholder="@gmail.comで終わるメールアドレスをご入力ください",
+                placeholder="@gmail.comで終わるメールアドレスをご入力ください, 例：randomone@gmail.com",
             )
             password = st.text_input("パスワード", type="password")
             if st.form_submit_button("ログイン", type="primary"):
@@ -176,7 +176,7 @@ if not st.session_state.authenticated:
         with st.form("register_form"):
             reg_email = st.text_input(
                 "メールアドレス",
-                placeholder="@gmail.comで終わるメールアドレスをご入力ください",
+                placeholder="@gmail.comで終わるメールアドレスをご入力ください, 例：randomone@gmail.com",
                 key="reg_email",
             )
             reg_password = st.text_input(
