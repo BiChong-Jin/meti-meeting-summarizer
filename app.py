@@ -18,6 +18,15 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 load_dotenv()
 
+# Bridge Streamlit Cloud secrets → environment variables
+# so os.getenv() works in all modules (auth.py, checker.py, etc.)
+try:
+    for key, value in st.secrets.items():
+        if isinstance(value, str) and key not in os.environ:
+            os.environ[key] = value
+except FileNotFoundError:
+    pass  # No secrets.toml — using .env locally
+
 from auth import (
     AuthError,
     authenticate,
