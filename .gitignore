@@ -1,4 +1,6 @@
-*.md
+debugnote.md
+DESIGN_DOC.md
+skelton.md
 .env.example
 .env
 debugnote.md 
