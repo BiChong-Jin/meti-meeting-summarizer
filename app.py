@@ -3,11 +3,14 @@ import logging
 import os
 import time
 import uuid
+
 import fitz  # PyMuPDF
 import streamlit as st
 from dotenv import load_dotenv
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 log = logging.getLogger(__name__)
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
@@ -15,14 +18,30 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 load_dotenv()
 
+from auth import (
+    AuthError,
+    authenticate,
+    delete_user,
+    list_users,
+    register_user,
+    update_role,
+)
 from db import get_connection
-from pdf_fetcher import download_pdf, scrape_page
-from ocr import extract_text_with_ocr
 from notifier import send_slack
+from ocr import extract_text_with_ocr
+from pdf_fetcher import download_pdf, scrape_page
+from report_store import (
+    REPORTS_PER_PAGE,
+    count_reports,
+    list_reports,
+    list_video_reports,
+    load_report,
+    save_report,
+    search_reports,
+    search_video_reports,
+)
 from site_monitor import check_for_updates, save_state
-from report_store import save_report, list_reports, list_video_reports, load_report, search_reports, search_video_reports, count_reports, REPORTS_PER_PAGE
-from video_summarizer import extract_video_id, fetch_transcript, VideoTranscriptError
-from auth import register_user, authenticate, list_users, delete_user, update_role, AuthError
+from video_summarizer import VideoTranscriptError, extract_video_id, fetch_transcript
 
 # --- Per-session cache helpers ---
 SESSION_TTL_DAYS = 7
@@ -49,7 +68,13 @@ def load_cache() -> dict:
             "SELECT * FROM session_cache WHERE session_id = ?", (_get_session_id(),)
         ).fetchone()
     if not row:
-        return {"pdf_texts": [], "summary_result": None, "video_summary_result": None, "auth_email": "", "auth_role": ""}
+        return {
+            "pdf_texts": [],
+            "summary_result": None,
+            "video_summary_result": None,
+            "auth_email": "",
+            "auth_role": "",
+        }
     return {
         "pdf_texts": json.loads(row["pdf_texts"]),
         "summary_result": row["summary_result"],
@@ -129,7 +154,10 @@ if not st.session_state.authenticated:
 
     with login_tab:
         with st.form("login_form"):
-            email = st.text_input("メールアドレス", placeholder="会社のメールアドレスをご入力ください")
+            email = st.text_input(
+                "メールアドレス",
+                placeholder="@gmail.comで終わるメールアドレスをご入力ください",
+            )
             password = st.text_input("パスワード", type="password")
             if st.form_submit_button("ログイン", type="primary"):
                 try:
@@ -146,9 +174,17 @@ if not st.session_state.authenticated:
 
     with register_tab:
         with st.form("register_form"):
-            reg_email = st.text_input("メールアドレス", placeholder="会社のメールアドレスをご入力ください", key="reg_email")
-            reg_password = st.text_input("パスワード（8文字以上）", type="password", key="reg_pw")
-            reg_confirm = st.text_input("パスワード確認", type="password", key="reg_confirm")
+            reg_email = st.text_input(
+                "メールアドレス",
+                placeholder="@gmail.comで終わるメールアドレスをご入力ください",
+                key="reg_email",
+            )
+            reg_password = st.text_input(
+                "パスワード（8文字以上）", type="password", key="reg_pw"
+            )
+            reg_confirm = st.text_input(
+                "パスワード確認", type="password", key="reg_confirm"
+            )
             if st.form_submit_button("登録"):
                 if reg_password != reg_confirm:
                     st.error("パスワードが一致しません。")
@@ -223,7 +259,9 @@ if st.sidebar.button("今すぐ確認"):
                             send_slack(slack_webhook, monitor_url, result)
                             st.info("Slack通知を送信しました")
                         else:
-                            st.warning("SLACK_WEBHOOK が .env に設定されていないため通知は送信されていません")
+                            st.warning(
+                                "SLACK_WEBHOOK が .env に設定されていないため通知は送信されていません"
+                            )
                     else:
                         st.info(f"更新なし\n{result['last_update_date']}")
                 except Exception as e:
@@ -254,7 +292,9 @@ if st.session_state.user_role == "admin":
         users = list_users()
         for u in users:
             is_self = u["email"] == st.session_state.user_email
-            col_email, col_role, col_action, col_del = st.columns([0.4, 0.15, 0.25, 0.2])
+            col_email, col_role, col_action, col_del = st.columns(
+                [0.4, 0.15, 0.25, 0.2]
+            )
             col_email.write(u["email"])
             col_role.write(u["role"])
             if not is_self:
@@ -286,7 +326,9 @@ def _map_single_chunk(chunk_text: str, map_prompt, api_key: str) -> str:
     return llm.invoke(prompt_text).content
 
 
-def run_summarization(text_chunks: list[str], map_prompt, reduce_prompt, stream_container=None) -> str:
+def run_summarization(
+    text_chunks: list[str], map_prompt, reduce_prompt, stream_container=None
+) -> str:
     """Run parallel map + streaming reduce summarization."""
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
@@ -300,7 +342,9 @@ def run_summarization(text_chunks: list[str], map_prompt, reduce_prompt, stream_
     # --- Parallel map phase ---
     summaries = [None] * len(all_chunks)
     if stream_container is not None:
-        stream_container.info(f"📊 {len(all_chunks)} チャンクを {MAP_MODEL} で並列処理中...")
+        stream_container.info(
+            f"📊 {len(all_chunks)} チャンクを {MAP_MODEL} で並列処理中..."
+        )
 
     completed = 0
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL_CHUNKS) as pool:
@@ -313,13 +357,17 @@ def run_summarization(text_chunks: list[str], map_prompt, reduce_prompt, stream_
             summaries[idx] = future.result()
             completed += 1
             if stream_container is not None:
-                stream_container.info(f"📊 並列処理中... {completed}/{len(all_chunks)} 完了")
+                stream_container.info(
+                    f"📊 並列処理中... {completed}/{len(all_chunks)} 完了"
+                )
 
     # --- Reduce phase (full model, streaming) ---
     combined_summaries = "\n\n".join(summaries)
     reduce_text = reduce_prompt.format(text=combined_summaries)
 
-    llm = ChatOpenAI(model=model_choice, api_key=openai_api_key, temperature=0, streaming=True)
+    llm = ChatOpenAI(
+        model=model_choice, api_key=openai_api_key, temperature=0, streaming=True
+    )
     log.info("Reduce phase started with %s (streaming)", model_choice)
 
     if stream_container is not None:
@@ -413,7 +461,9 @@ with st.expander("🌐 WebサイトからPDFを自動取得"):
                     st.session_state["_meeting_date"] = page_data["date"]
                     # Auto-select the first video URL if found
                     if page_data["video_links"]:
-                        st.session_state["_selected_video_url"] = page_data["video_links"][0]["url"]
+                        st.session_state["_selected_video_url"] = page_data[
+                            "video_links"
+                        ][0]["url"]
                     msg = f"{len(page_data['pdf_links'])} 件のPDF"
                     if page_data["video_links"]:
                         msg += f"、{len(page_data['video_links'])} 件の動画が見つかりました"
@@ -436,7 +486,9 @@ with st.expander("🌐 WebサイトからPDFを自動取得"):
             added = 0
             with st.spinner("ダウンロード中..."):
                 for link in selected:
-                    if any(f[0] == link["filename"] for f in st.session_state.pdf_texts):
+                    if any(
+                        f[0] == link["filename"] for f in st.session_state.pdf_texts
+                    ):
                         continue
                     try:
                         pdf_bytes = download_pdf(link["url"])
@@ -457,7 +509,9 @@ with st.expander("🌐 WebサイトからPDFを自動取得"):
         choice = st.selectbox(
             "複数の動画が見つかりました。要約する動画を選択してください:",
             options=[v["url"] for v in video_links],
-            format_func=lambda u: next(v["title"] for v in video_links if v["url"] == u),
+            format_func=lambda u: next(
+                v["title"] for v in video_links if v["url"] == u
+            ),
             key="video_select",
         )
         st.session_state["video_url_input"] = choice
@@ -499,10 +553,16 @@ if st.session_state.pdf_texts:
 
     if st.button("🚀 要約レポートを作成する", type="primary"):
         if not openai_api_key:
-            st.error("OPENAI_API_KEY が .env に設定されていません。管理者に連絡してください。")
+            st.error(
+                "OPENAI_API_KEY が .env に設定されていません。管理者に連絡してください。"
+            )
         else:
             try:
-                log.info("PDF summarization started by %s (%d files)", st.session_state.user_email, len(st.session_state.pdf_texts))
+                log.info(
+                    "PDF summarization started by %s (%d files)",
+                    st.session_state.user_email,
+                    len(st.session_state.pdf_texts),
+                )
                 texts = [content for _, content in st.session_state.pdf_texts]
                 stream_box = st.empty()
                 st.session_state.summary_result = run_summarization(
@@ -512,8 +572,10 @@ if st.session_state.pdf_texts:
                 log.info("PDF summarization completed")
                 sources = [name for name, _ in st.session_state.pdf_texts]
                 st.session_state.last_report_id = save_report(
-                    meeting_title, meeting_date,
-                    st.session_state.summary_result, sources,
+                    meeting_title,
+                    meeting_date,
+                    st.session_state.summary_result,
+                    sources,
                     source_type="pdf",
                 )
                 save_cache()
@@ -547,7 +609,10 @@ if st.session_state.summary_result:
 # --- 6. Video Summary ---
 st.divider()
 st.subheader("🎥 動画要約")
-if "_selected_video_url" in st.session_state and st.session_state["_selected_video_url"]:
+if (
+    "_selected_video_url" in st.session_state
+    and st.session_state["_selected_video_url"]
+):
     st.session_state["video_url_input"] = st.session_state.pop("_selected_video_url")
 video_url = st.text_input(
     "YouTube URL",
@@ -559,10 +624,16 @@ if st.button("🎬 動画を要約する", type="secondary"):
     if not video_url:
         st.warning("YouTubeのURLを入力してください")
     elif not openai_api_key:
-        st.error("OPENAI_API_KEY が .env に設定されていません。管理者に連絡してください。")
+        st.error(
+            "OPENAI_API_KEY が .env に設定されていません。管理者に連絡してください。"
+        )
     else:
         try:
-            log.info("Video summarization started by %s: %s", st.session_state.user_email, video_url)
+            log.info(
+                "Video summarization started by %s: %s",
+                st.session_state.user_email,
+                video_url,
+            )
             with st.spinner("字幕を取得中..."):
                 video_id = extract_video_id(video_url)
                 transcript = fetch_transcript(video_id)
@@ -573,7 +644,8 @@ if st.button("🎬 動画を要約する", type="secondary"):
             stream_box.empty()
             log.info("Video summarization completed")
             st.session_state.last_video_report_id = save_report(
-                meeting_title, meeting_date,
+                meeting_title,
+                meeting_date,
                 st.session_state.video_summary_result,
                 [video_url],
                 source_type="video",
@@ -605,10 +677,15 @@ if st.session_state.get("video_summary_result"):
         mime="text/plain",
     )
     if st.session_state.get("last_video_report_id"):
-        col_link.markdown(f"🔗 [この動画要約の共有リンク](?sid={_get_session_id()}&view={st.session_state.last_video_report_id})")
+        col_link.markdown(
+            f"🔗 [この動画要約の共有リンク](?sid={_get_session_id()}&view={st.session_state.last_video_report_id})"
+        )
+
 
 # --- 7. Shared Reports Library ---
-def _render_report_list(reports: list[dict], search_query: str, source_type: str, page_key: str) -> None:
+def _render_report_list(
+    reports: list[dict], search_query: str, source_type: str, page_key: str
+) -> None:
     if not reports:
         if search_query:
             st.info("キーワードとマッチした検索結果が見つかりませんでした")
@@ -628,24 +705,40 @@ def _render_report_list(reports: list[dict], search_query: str, source_type: str
     if total_pages > 1:
         col_prev, col_info, col_next = st.columns([1, 2, 1])
         col_info.caption(f"ページ {current_page} / {total_pages}（全{total}件）")
-        if col_prev.button("前のページ", key=f"{page_key}_prev", disabled=current_page <= 1):
+        if col_prev.button(
+            "前のページ", key=f"{page_key}_prev", disabled=current_page <= 1
+        ):
             st.session_state[page_key] = current_page - 1
             st.rerun()
-        if col_next.button("次のページ", key=f"{page_key}_next", disabled=current_page >= total_pages):
+        if col_next.button(
+            "次のページ", key=f"{page_key}_next", disabled=current_page >= total_pages
+        ):
             st.session_state[page_key] = current_page + 1
             st.rerun()
 
 
 st.divider()
 with st.expander("📚 過去のPDFレポート一覧", expanded=False):
-    pdf_search = st.text_input("🔍 レポート検索", placeholder="キーワードを入力...", key="pdf_search")
+    pdf_search = st.text_input(
+        "🔍 レポート検索", placeholder="キーワードを入力...", key="pdf_search"
+    )
     pdf_page = st.session_state.get("pdf_report_page", 1)
-    reports = search_reports(pdf_search, page=pdf_page) if pdf_search else list_reports(page=pdf_page)
+    reports = (
+        search_reports(pdf_search, page=pdf_page)
+        if pdf_search
+        else list_reports(page=pdf_page)
+    )
     _render_report_list(reports, pdf_search, "pdf", "pdf_report_page")
 
 st.divider()
 with st.expander("🎥 過去の動画要約一覧", expanded=False):
-    video_search = st.text_input("🔍 動画要約検索", placeholder="キーワードを入力...", key="video_search")
+    video_search = st.text_input(
+        "🔍 動画要約検索", placeholder="キーワードを入力...", key="video_search"
+    )
     video_page = st.session_state.get("video_report_page", 1)
-    video_reports = search_video_reports(video_search, page=video_page) if video_search else list_video_reports(page=video_page)
+    video_reports = (
+        search_video_reports(video_search, page=video_page)
+        if video_search
+        else list_video_reports(page=video_page)
+    )
     _render_report_list(video_reports, video_search, "video", "video_report_page")
