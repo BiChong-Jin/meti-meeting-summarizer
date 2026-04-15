@@ -159,6 +159,9 @@ if "authenticated" not in st.session_state:
 
 if not st.session_state.authenticated:
     st.title("📋 会議資料・要約作成ツール")
+    st.info(
+        "このアプリは経産省のミーティング資料・レポートおよび動画の要約ツールです。対象となるのはこちらです：次世代電力・ガス事業基盤構築小委員会、url例：https://www.meti.go.jp/shingikai/enecho/denryoku_gas/jisedai_kiban/001.html"
+    )
     login_tab, register_tab = st.tabs(["ログイン", "新規登録"])
 
     with login_tab:
@@ -222,8 +225,10 @@ if _view_id:
         st.error("レポートが見つかりませんでした。")
     st.stop()  # Don't render the rest of the app
 
-st.title("📋 会議資料・要約作成ツール (OpenAI)")
-
+st.title("📋 会議資料・要約作成ツール")
+st.info(
+    "このアプリは経産省のミーティング資料・レポートおよび動画の要約ツールです。対象となるのはこちらです：次世代電力・ガス事業基盤構築小委員会、url例：https://www.meti.go.jp/shingikai/enecho/denryoku_gas/jisedai_kiban/001.html"
+)
 # --- 2. Sidebar Settings ---
 st.sidebar.caption(f"ログイン中: {st.session_state.user_email}")
 if st.sidebar.button("ログアウト"):
