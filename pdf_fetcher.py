@@ -26,7 +26,7 @@ class ScraperWarning(Exception):
     """Non-fatal issue the caller should surface to the user."""
 
 
-def _get_with_retry(url: str, timeout: int = 30) -> requests.Response:
+def _get_with_retry(url: str, timeout: int = 60) -> requests.Response:
     """GET with simple retry for transient network errors."""
     last_err = None
     for attempt in range(1, MAX_RETRIES + 1):
