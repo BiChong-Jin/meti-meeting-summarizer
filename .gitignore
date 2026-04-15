@@ -7,3 +7,6 @@ deleted_files/*
 data.db
 data.db-wal
 data.db-shm
+app_cache.json
+reports/
+session_cache/
