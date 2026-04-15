@@ -485,7 +485,13 @@ with st.expander("🌐 WebサイトからPDFを自動取得"):
                 except Exception as e:
                     st.session_state["_fetched_links"] = []
                     st.session_state["_fetched_video_links"] = []
-                    st.error(f"取得エラー: {e}")
+                    if "timed out" in str(e).lower() or "timeout" in str(e).lower():
+                        st.error(
+                            "接続がタイムアウトしました。対象サイトが海外IPからのアクセスをブロックしている可能性があります。"
+                            "手動でPDFをダウンロードし、下のアップロード機能をご利用ください。"
+                        )
+                    else:
+                        st.error(f"取得エラー: {e}")
 
     if st.session_state.get("_fetched_links"):
         links = st.session_state["_fetched_links"]
