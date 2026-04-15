@@ -20,7 +20,7 @@ from report_store import save_report, list_reports, search_reports, load_report,
 @pytest.fixture()
 def test_db(tmp_path, monkeypatch):
     monkeypatch.setattr("db.DB_PATH", tmp_path / "pressure.db")
-    monkeypatch.setattr("auth.ALLOWED_DOMAIN", "digitalgrid.com")
+    monkeypatch.setattr("auth.ALLOWED_DOMAIN", "gmail.com")
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +107,7 @@ class TestConcurrentAuth:
 
         def register_one(i):
             try:
-                register_user(f"user{i}@digitalgrid.com", "password123")
+                register_user(f"user{i}@gmail.com", "password123")
                 results.append(i)
             except AuthError:
                 errors.append(i)
@@ -126,14 +126,14 @@ class TestConcurrentAuth:
         """30 users logging in at the same time."""
         # Register users first
         for i in range(self.NUM_USERS):
-            register_user(f"login{i}@digitalgrid.com", "password123")
+            register_user(f"login{i}@gmail.com", "password123")
 
         errors = []
 
         def login_one(i):
             try:
-                user = authenticate(f"login{i}@digitalgrid.com", "password123")
-                assert user["email"] == f"login{i}@digitalgrid.com"
+                user = authenticate(f"login{i}@gmail.com", "password123")
+                assert user["email"] == f"login{i}@gmail.com"
             except Exception as e:
                 errors.append(f"login {i}: {e}")
 
